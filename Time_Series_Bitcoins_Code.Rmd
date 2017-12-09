@@ -1,0 +1,147 @@
+---
+title: "Bitcoins Market"
+author: "Idris Rasheed"
+date: "August 12, 2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries}
+library(tseries)
+library(qpcR)
+library(readxl)
+library(forecast)
+```
+
+```{r read data}
+Bitcoin <- read_excel("~/R/BITCOINWATCH-MINING.xls")
+#Pick specific columns
+Bitcoin <- subset(Bitcoin, select = c(Date,Total.BTC))
+#Start from latest date to most recent
+Bitcoin <- Bitcoin[nrow(Bitcoin):1,]
+```
+
+```{r ts}
+#Make data into time series object
+Bit.ts <- ts(Bitcoin$Total.BTC, start = c(2016,1), 
+             end = c(2017,5), 
+             frequency = 365)
+```
+
+```{r ts plot}
+ts.plot(Bit.ts, xlab = "Time", ylab = "Total Bitcoins", main = "Bitcoin Time Series")
+```
+
+```{r ori var}
+print(paste("Variance of original time series = ", var(Bit.ts)))
+print(paste("Mean of original time series = ", mean(Bit.ts)))
+```
+
+```{r dif 1 var}
+Bit.diff1 <- diff(Bit.ts, lag = 1)
+print(paste("Variance differenced at lag 1 = ", var(Bit.diff1)))
+print(paste("Mean differenced at lag 1 = ", mean(Bit.diff1)))
+```
+
+```{r dif 2 var}
+Bit.diff2 <- diff(Bit.ts, lag = 2)
+print(paste("Variance differenced at lag 2 = ", var(Bit.diff2)))
+print(paste("Mean differenced at lag 2 = ", mean(Bit.diff2)))
+```
+
+```{r dif plot}
+op <- par(mfrow = c(1,2))
+ts.plot(Bit.diff1, main = 'Detrended Time Series', ylab = 'Total Bitcoins', xlab = 'Time')
+ts.plot(Bit.ts, xlab = "Time", ylab = "Total Bitcoins", main = "Original Time Series")
+par(op)
+```
+
+ACF and PACF
+```{r acf}
+#Plot ACF and PACF side by side
+op <- par(mfrow = c(1,2))
+acf(Bit.diff1, lag.max=20)
+pacf(Bit.diff1, lag.max=20)
+par(op)
+```
+
+```{r fit1}
+fit1 <- arima(diff(Bit.ts), order=c(5,1,1))
+fit1
+print(paste("AICC =", AICc(fit1)))
+```
+
+```{r fit2}
+fit2 <- arima(diff(Bit.ts), order=c(6,1,1)) 
+fit2
+print(paste("AICC =", AICc(fit2)))
+```
+
+```{r orders}
+p = 6
+q = 1
+h = length(Bit.diff1)
+lag = floor(sqrt(h))
+```
+
+```{r box-pierce}
+#Box-Pierce test
+Box.test(residuals(fit2), lag = lag, type = c("Box-Pierce"), fitdf = p+q)
+```
+
+```{r box-test}
+#Box-Ljung test
+Box.test(residuals(fit2), type="Ljung", lag = lag, fitdf = p+q)
+```
+
+```{r ljung}
+#McLeod-Li test: Ljung-Box for squares
+Box.test(residuals(fit2)^2,lag = lag, fitdf = p + q, type = "Ljung-Box")
+```
+
+```{r shapiro}
+#Normality test
+shapiro.test(residuals(fit2))
+```
+
+```{r resid ts}
+ts.plot(residuals(fit2),main = "Fitted Residuals")
+```
+
+```{r dia}
+par(mfrow=c(1,2),oma=c(0,0,2,0))
+# Plot diagnostics of residuals
+op <- par(mfrow=c(2,2))
+# acf
+acf(residuals(fit2),main = "Autocorrelation")
+# pacf
+pacf(residuals(fit2),main = "Partial Autocorrelation")
+# Histogram
+hist(residuals(fit2),main = "Histogram")
+# q-q plot
+qqnorm(residuals(fit2))
+qqline(residuals(fit2),col ="purple")
+# Add overall title
+title("Fitted Residuals Diagnostics", outer=TRUE)
+```
+
+```{r stat}
+op <- par(mfrow = c(1,2))
+setwd('C:/Users/Aquaria/Documents/R') # path of your working directory
+source("plot.roots.R.txt") # read source file from Gaucho Space
+#Plot coefficients on unit circle
+plot.roots(NULL,polyroot(c(-0.7775,-0.5994, -0.4469, -0.3137, -0.1971, -0.0946)), main="Roots of AR Part")
+plot.roots(NULL,polyroot(c(-1)), main="Roots of MA Part")
+par(op)
+```
+
+```{r Forecast}
+#Forecast 20 days into the future
+forecast <- forecast(Bit.ts,20)
+plot(forecast, main = "Bitcoin Forecast", 
+     ylab = "Total Bitcoins", 
+     xlab = "Time")
+```
